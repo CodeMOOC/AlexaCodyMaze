@@ -1,0 +1,49 @@
+version: '3'
+volumes:
+  alexacodymaze_database:
+    external: true
+
+networks:
+  web:
+    external: true
+  backend:
+
+services:
+  bot:
+    container_name: bot
+    build: ../src/Bot
+    depends_on:
+    - database
+    networks:
+    - web
+    - backend
+    env_file: config.env
+    expose:
+    - 5001
+    environment:
+    - ASPNETCORE_ENVIRONMENT=Development
+    labels:
+    - "traefik.enable=true"
+    - "traefik.docker.network=web"
+    - "traefik.protocol=http"
+    - "traefik.port=5001"
+    - "traefik.frontend.rule=Host:botify.it;PathPrefixStrip:/alexacodymaze"
+    - "traefik.frontend.entryPoints=https"
+
+  database:
+    container_name: database
+    image: mysql:5.7
+    networks:
+    - backend
+    volumes:
+    - alexacodymaze_database:/var/lib/mysql:rw
+    env_file: config.env
+
+  database-client:
+    container_name: database-client
+    build: ../src/MysqlClient
+    depends_on:
+    - database
+    networks:
+    - backend
+    env_file: config.env
