@@ -28,6 +28,7 @@ namespace Bot {
 
             // Add services to dependency registry
             services.AddSingleton<IHttpContextAccessor, HttpContextAccessor>();
+            services.AddScoped<DatabaseManager>();
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
