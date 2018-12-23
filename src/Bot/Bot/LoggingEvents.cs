@@ -12,6 +12,8 @@ namespace Bot {
 
         public const int Game = 2000;
 
+        public const int Requests = 3000;
+
     }
 
 }

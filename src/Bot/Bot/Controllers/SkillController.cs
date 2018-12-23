@@ -1,11 +1,9 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 using Alexa.NET;
 using Alexa.NET.Request;
+using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
-using Bot.Data;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 
@@ -27,21 +25,32 @@ namespace Bot.Controllers {
 
         [HttpPost]
         public IActionResult Process([FromBody] SkillRequest request) {
-            Logger.LogInformation("Incoming request type '{0}'", request.Request.Type);
+            Logger.LogDebug("Incoming request, type: '{0}'", request.Request.Type);
 
             if(!request.Request.Locale.Equals("it-IT", StringComparison.InvariantCultureIgnoreCase)) {
                 return UnsupportedLanguage();
             }
 
-            switch(request.Request.Type) {
-                case RequestTypes.LaunchRequest:
-                    return NewSession(request);
+            switch(request.Request) {
+                case LaunchRequest lr:
+                    Logger.LogInformation(LoggingEvents.Requests, "Incoming Launch Request");
+                    return NewSession(request, lr);
+
+                case SessionEndedRequest er:
+                    return DoNothing();
+
+                case IntentRequest ir:
+                    Logger.LogInformation(LoggingEvents.Requests, "Incoming Intent Request, name '{0}'", ir.Intent.Name);
+                    if(ir.Intent.Name.Equals("ReachCell", StringComparison.InvariantCulture)) {
+                        return ReachCell(request, ir);
+                    }
+                    break;
             }
 
             return DidNotUnderstand();
         }
 
-        private IActionResult NewSession(SkillRequest request) {
+        private IActionResult NewSession(SkillRequest request, LaunchRequest launchRequest) {
             var sessionExists = Database.Context.Moves
                 .Where(s => s.AlexaSessionId == request.Session.SessionId)
                 .SingleOrDefault() != null;
@@ -51,18 +60,70 @@ namespace Bot.Controllers {
                 return InternalError();
             }
 
-            var response = ResponseBuilder.Ask(new SsmlOutputSpeech {
+            var response = ResponseBuilder.Ask(
+                new SsmlOutputSpeech {
                     Ssml = @"<speak>Ciao da <emphasis level=""moderate"">Cody Maze</emphasis>.
-Posiziònati su uno spazio lungo il bordo della scacchiera.
+Raggiungi uno spazio lungo il bordo della scacchiera.
 Poi dimmi le coordinate che hai scelto.</speak>"
-            },
+                },
                 new Reprompt {
                     OutputSpeech = new SsmlOutputSpeech {
-                        Ssml = @"<speak>Quali sono le <emphasis level=""moderate"">coordinate</emphasis> dello spazio in cui sei?</speak>"
+                        Ssml = @"<speak>Quali sono le <emphasis level=""moderate"">coordinate</emphasis> dello spazio in cui ti trovi?</speak>"
                     }
                 }
             );
             return Ok(response);
+        }
+
+        private IActionResult ReachCell(SkillRequest request, IntentRequest intent) {
+            string sCol = intent.Intent.Slots["column"]?.Value;
+            string sRow = intent.Intent.Slots["row"]?.Value;
+            string sDir = intent.Intent.Slots["direction"]?.Value;
+
+            var coords = new Coordinates(sCol, sRow, sDir);
+            Logger.LogDebug(LoggingEvents.Game, "User reaches coordinates {0}", coords);
+
+            if(!coords.IsValid) {
+                // Something went wrong
+                Logger.LogError(LoggingEvents.Game, "Invalid coordinates");
+
+                var response = ResponseBuilder.Ask(
+                    new SsmlOutputSpeech {
+                        Ssml = @"<speak>Non ho capito. Ripeti le coordinate per favore.</speak>"
+                    },
+                    new Reprompt {
+                        OutputSpeech = new SsmlOutputSpeech {
+                            Ssml = @"<speak>Quali sono le <emphasis level=""moderate"">coordinate</emphasis> dello spazio in cui ti trovi?</speak>"
+                        }
+                    }
+                );
+                return Ok(response);
+            }
+            if(!coords.Direction.HasValue) {
+                // Register coordinates in session and ask for direction
+                Session session = request.Session;
+                session.Attributes["row"] = coords.Row;
+                session.Attributes["col"] = coords.Column;
+
+                var response = ResponseBuilder.Ask(
+                    new SsmlOutputSpeech {
+                        Ssml = @"<speak>OK. In che direzione stai guardando?</speak>"
+                    },
+                    new Reprompt {
+                        OutputSpeech = new SsmlOutputSpeech {
+                            Ssml = @"<speak>Dimmi in che <emphasis level=""moderate"">direzione</emphasis> stai guardando.</speak>"
+                        }
+                    },
+                    session
+                );
+                return Ok(response);
+            }
+
+            return ProcessStep(coords);
+        }
+
+        private IActionResult ProcessStep(Coordinates target) {
+            return Ok();
         }
 
         private IActionResult UnsupportedLanguage() {
@@ -75,6 +136,10 @@ Poi dimmi le coordinate che hai scelto.</speak>"
 
         private IActionResult InternalError(string msg = null) {
             return Ok(ResponseBuilder.Tell(msg ?? "C'è stato un errore, riprova"));
+        }
+
+        private IActionResult DoNothing() {
+            return Ok(ResponseBuilder.Empty());
         }
 
     }

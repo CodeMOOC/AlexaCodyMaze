@@ -32,7 +32,7 @@ namespace Bot.Data {
                 e.Property(nameof(Move.AlexaSessionId)).IsRequired();
                 e.Property(nameof(Move.AlexaUserId)).IsRequired();
                 e.Property(nameof(Move.Coordinates)).HasColumnType("CHAR(2)").IsRequired();
-                e.Property(nameof(Move.Directions)).HasColumnType("CHAR(1)").IsRequired(false);
+                e.Property(nameof(Move.Direction)).HasColumnType("CHAR(1)").IsRequired(false);
                 e.Property(nameof(Move.CreationTime)).IsRequired();
                 e.Property(nameof(Move.ReachedOn)).IsRequired(false);
             });
