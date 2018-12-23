@@ -17,13 +17,14 @@ CREATE TABLE IF NOT EXISTS `CodyMaze`.`Moves` (
   `ID` INT UNSIGNED NOT NULL AUTO_INCREMENT,
   `AlexaSessionID` VARCHAR(256) NOT NULL,
   `AlexaUserID` VARCHAR(512) NOT NULL,
-  `Coordinates` CHAR(3) NOT NULL,
-  `CreationDate` DATETIME NOT NULL,
+  `Coordinates` CHAR(2) NOT NULL,
+  `Direction` CHAR(1) DEFAULT NULL,
+  `CreationTime` DATETIME NOT NULL,
   `ReachedOn` DATETIME DEFAULT NULL,
   PRIMARY KEY (`ID`),
   INDEX `Session_idx` (`AlexaSessionID`),
   INDEX `User_idx` (`AlexaUserID`),
-  INDEX `Timestamp_idx` (`CreationDate`)
+  INDEX `Timestamp_idx` (`CreationTime`)
 )
 ENGINE = InnoDB;
 

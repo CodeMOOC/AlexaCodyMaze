@@ -11,7 +11,8 @@ namespace Bot.Data {
         public string AlexaSessionId { get; set; }
         public string AlexaUserId { get; set; }
         public string Coordinates { get; set; }
-        public DateTime CreationDate { get; set; }
+        public char? Directions { get; set; }
+        public DateTime CreationTime { get; set; }
         public DateTime? ReachedOn { get; set; }
 
     }
