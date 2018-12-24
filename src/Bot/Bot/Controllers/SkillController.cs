@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using Alexa.NET;
 using Alexa.NET.Request;
@@ -41,8 +42,11 @@ namespace Bot.Controllers {
 
                 case IntentRequest ir:
                     Logger.LogInformation(LoggingEvents.Requests, "Incoming Intent Request, name '{0}'", ir.Intent.Name);
-                    if(ir.Intent.Name.Equals("ReachCell", StringComparison.InvariantCulture)) {
-                        return ReachCell(request, ir);
+                    switch(ir.Intent.Name) {
+                        case IntentTypes.ReachCell:
+                            return ReachCell(request, ir);
+                        case IntentTypes.GiveDirection:
+                            return GiveDirection(request, ir);
                     }
                     break;
             }
@@ -81,9 +85,26 @@ Poi dimmi le coordinate che hai scelto.</speak>"
             string sDir = intent.Intent.Slots["direction"]?.Value;
 
             var coords = new Coordinates(sCol, sRow, sDir);
-            Logger.LogDebug(LoggingEvents.Game, "User reaches coordinates {0}", coords);
 
-            if(!coords.IsValid) {
+            return ProcessStep(request, coords);
+        }
+
+        private IActionResult GiveDirection(SkillRequest request, IntentRequest intent) {
+            string sDir = intent.Intent.Slots["direction"]?.Value;
+
+            var session = request.Session;
+            int iRow = session.Attributes.SafeGet("row", -1);
+            int iCol = session.Attributes.SafeGet("col", -1);
+
+            var coords = new Coordinates(iCol, iRow, sDir);
+
+            return ProcessStep(request, coords);
+        }
+
+        private IActionResult ProcessStep(SkillRequest request, Coordinates target) {
+            Logger.LogInformation(LoggingEvents.Game, "User reaches coordinates {0}", target);
+
+            if (!target.IsValid) {
                 // Something went wrong
                 Logger.LogError(LoggingEvents.Game, "Invalid coordinates");
 
@@ -99,11 +120,13 @@ Poi dimmi le coordinate che hai scelto.</speak>"
                 );
                 return Ok(response);
             }
-            if(!coords.Direction.HasValue) {
+            if (!target.Direction.HasValue) {
                 // Register coordinates in session and ask for direction
                 Session session = request.Session;
-                session.Attributes["row"] = coords.Row;
-                session.Attributes["col"] = coords.Column;
+                if (session.Attributes == null)
+                    session.Attributes = new Dictionary<string, object>();
+                session.Attributes["row"] = target.Row;
+                session.Attributes["col"] = target.Column;
 
                 var response = ResponseBuilder.Ask(
                     new SsmlOutputSpeech {
@@ -119,10 +142,6 @@ Poi dimmi le coordinate che hai scelto.</speak>"
                 return Ok(response);
             }
 
-            return ProcessStep(coords);
-        }
-
-        private IActionResult ProcessStep(Coordinates target) {
             return Ok();
         }
 

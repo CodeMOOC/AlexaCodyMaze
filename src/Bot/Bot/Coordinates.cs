@@ -23,6 +23,12 @@ namespace Bot {
             Direction = direction.ToDirection();
         }
 
+        public Coordinates(int col, int row, string direction) {
+            Column = col;
+            Row = row;
+            Direction = direction.ToDirection();
+        }
+
         public bool IsValid {
             get => (Column >= 1 && Column <= 5 && Row >= 1 && Row <= 5);
         }
