@@ -55,6 +55,48 @@ namespace Bot {
             }
         }
 
+        public static Direction ToLeft(this Direction d) {
+            switch(d) {
+                default:
+                case Direction.North:
+                    return Direction.West;
+                case Direction.East:
+                    return Direction.North;
+                case Direction.South:
+                    return Direction.East;
+                case Direction.West:
+                    return Direction.South;
+            }
+        }
+
+        public static Direction ToRight(this Direction d) {
+            switch (d) {
+                default:
+                case Direction.North:
+                    return Direction.East;
+                case Direction.East:
+                    return Direction.South;
+                case Direction.South:
+                    return Direction.West;
+                case Direction.West:
+                    return Direction.North;
+            }
+        }
+
+        public static string ToLocale(this Direction d) {
+            switch(d) {
+                default:
+                case Direction.North:
+                    return "nord";
+                case Direction.East:
+                    return "est";
+                case Direction.South:
+                    return "sud";
+                case Direction.West:
+                    return "ovest";
+            }
+        }
+
     }
 
 }

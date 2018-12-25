@@ -28,7 +28,8 @@ namespace Bot.Data {
 
         protected override void OnModelCreating(ModelBuilder modelBuilder) {
             modelBuilder.Entity<Move>(e => {
-                e.Property(nameof(Move.Id)).HasColumnType("INT UNSIGNED");
+                e.HasKey(nameof(Move.Id));
+                e.Property(nameof(Move.Id)).HasColumnType("INT UNSIGNED").ValueGeneratedOnAdd();
                 e.Property(nameof(Move.AlexaSessionId)).IsRequired();
                 e.Property(nameof(Move.AlexaUserId)).IsRequired();
                 e.Property(nameof(Move.Coordinates)).HasColumnType("CHAR(2)").IsRequired();
