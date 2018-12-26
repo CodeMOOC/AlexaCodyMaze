@@ -94,22 +94,22 @@ Poi dimmi le coordinate che hai scelto.</speak>"
             string sDir = intent.Intent.Slots["direction"]?.Value;
 
             var session = request.Session;
-            int iRow = session.Attributes.SafeGet("row", -1);
-            int iCol = session.Attributes.SafeGet("col", -1);
+            int iRow = (int)session.Attributes.SafeGet("row", (long)-1);
+            int iCol = (int)session.Attributes.SafeGet("col", (long)-1);
 
             var coords = new Coordinates(iCol, iRow, sDir);
 
             return ProcessStep(request, coords);
         }
 
-        private async Task<IActionResult> ProcessStep(SkillRequest request, Coordinates target) {
+        private async Task<IActionResult> ProcessStep(SkillRequest request, Coordinates coords) {
             Session session = request.Session;
             var state = new State(Database.Context, session);
 
-            Logger.LogInformation(LoggingEvents.Game, "User reaches coordinates {0}", target);
-            Logger.LogTrace(LoggingEvents.Game, "{0} prev. moves, last reached {1}", state.MovesCount, state.LastReached);
+            Logger.LogInformation(LoggingEvents.Game, "User reaches coordinates {0}", coords);
+            Logger.LogTrace(LoggingEvents.Game, "{0} moves, last reached {1}", state.MovesCount, state.LastReached);
 
-            if (!target.IsValid) {
+            if (!coords.IsValid) {
                 // Something went wrong
                 Logger.LogError(LoggingEvents.Game, "Invalid coordinates");
 
@@ -128,27 +128,39 @@ Poi dimmi le coordinate che hai scelto.</speak>"
 
             if(state.IsSessionStart) {
                 // First position, can ignore direction
-                if(Chessboard.IsStartPosition(target)) {
-                    Direction startDir = Chessboard.GetStartDirection(target);
-                    Logger.LogDebug(LoggingEvents.Game, "User in {0} should look towards {1}", target, startDir);
+                if(Chessboard.IsStartPosition(coords)) {
+                    Direction startDir = Chessboard.GetStartDirection(coords);
+                    Logger.LogDebug(LoggingEvents.Game, "User in {0} should look towards {1}", coords, startDir);
 
-                    Coordinates effectiveTarget = new Coordinates(target.Column, target.Row, startDir);
+                    Coordinates effectiveTarget = new Coordinates(coords.Column, coords.Row, startDir);
                     state.RecordDestination(effectiveTarget, true);
 
-                    if (effectiveTarget.Direction != target.Direction) {
+                    if (effectiveTarget.Direction != coords.Direction) {
                         // Hint at correct direction
                         var progResp = new ProgressiveResponse(request);
-                        await progResp.SendSpeech(string.Format("OK, assicurati di girarti verso {0}.", effectiveTarget.Direction.Value.ToLocale()));
+                        await progResp.SendSpeech(string.Format(
+                            "OK. Sei in {0}, {1}. Assicurati di girarti verso {2}.",
+                            effectiveTarget.Column.FromColumnIndex(),
+                            effectiveTarget.Row,
+                            effectiveTarget.Direction.Value.ToLocale()
+                        ));
+
+                        coords = effectiveTarget;
                     }
                 }
+                else {
+                    Logger.LogDebug(LoggingEvents.Game, "User in {0}, not a valid starting position", coords);
+
+                    return Ok(ResponseBuilder.Ask("Devi partire in uno spazio sul bordo della scacchiera. Spostati e dimmi dove sei.", null));
+                }
             }
-            else if (!target.Direction.HasValue) {
+            else if (!coords.Direction.HasValue) {
                 // Not first position, requires direction:
                 // register coordinates in session and ask for direction
                 if (session.Attributes == null)
                     session.Attributes = new Dictionary<string, object>();
-                session.Attributes["row"] = target.Row;
-                session.Attributes["col"] = target.Column;
+                session.Attributes["row"] = coords.Row;
+                session.Attributes["col"] = coords.Column;
 
                 var response = ResponseBuilder.Ask(
                     new SsmlOutputSpeech {
@@ -169,7 +181,7 @@ Poi dimmi le coordinate che hai scelto.</speak>"
             // Check for destination to reach
             var destination = state.LastDestination;
             if (destination.HasValue) {
-                if (destination.Value.Equals(target)) {
+                if (destination.Value.Equals(coords)) {
                     Logger.LogInformation(LoggingEvents.Game, "Correct cell");
 
                     state.ReachDestination();
@@ -177,24 +189,56 @@ Poi dimmi le coordinate che hai scelto.</speak>"
                     var progResp = new ProgressiveResponse(request);
                     await progResp.SendSpeech("Sei nel posto giusto!");
                 }
-                else if (destination.Value.LocationEquals(target)) {
+                else if (destination.Value.LocationEquals(coords)) {
                     Logger.LogInformation(LoggingEvents.Game, "Wrong direction, expected {0}", destination.Value);
 
-                    var response = ResponseBuilder.Ask("Stai guardando nella direzione sbagliata. Riprova.", null);
+                    var response = ResponseBuilder.Ask("Stai guardando nella direzione sbagliata. Riprova.", null, session);
                     return Ok(response);
                 }
                 else {
                     Logger.LogInformation(LoggingEvents.Game, "Wrong cell, expected {0}", destination.Value);
 
-                    var response = ResponseBuilder.Ask("Purtroppo sei nella casella sbagliata. Riprova.", null);
+                    var response = ResponseBuilder.Ask("Purtroppo sei nella casella sbagliata. Riprova.", null, session);
                     return Ok(response);
                 }
             }
 
+            if(state.MovesCount >= Chessboard.MaxLevel) {
+                Logger.LogInformation(LoggingEvents.Game, "User completed last level");
+
+                return Ok(ResponseBuilder.Tell(
+                    new SsmlOutputSpeech {
+                        Ssml = @"<speak>Complimenti! Hai completato <emphasis level=""moderate"">Cody Maze</emphasis> con successo.</speak>"
+                    }
+                 ));
+            }
+
             // Assign new destination
             Logger.LogInformation(LoggingEvents.Game, "Generating new destination (step {0})", state.MovesCount);
+            (var mazeDestination, var instructions) = Chessboard.GenerateMazeForLevel(coords, state.MovesCount);
+            if(!mazeDestination.IsValid) {
+                Logger.LogError(LoggingEvents.Game, "Invalid coordinates generated for maze level {0}", state.MovesCount);
+                return await InternalError();
+            }
+            state.RecordDestination(mazeDestination);
 
-            return Ok(ResponseBuilder.Tell("Ciao tanto"));
+            return Ok(ResponseBuilder.Ask(
+                new SsmlOutputSpeech {
+                    Ssml = string.Format(
+                        @"<speak>Esegui le seguenti istruzioni{1}. <emphasis level=""strong"">{0}</emphasis>.</speak>",
+                        instructions,
+                        (state.MovesCount <= 2) ? " e poi dimmi le tue coordinate e direzione" : string.Empty
+                    )
+                }, new Reprompt {
+                    OutputSpeech = new SsmlOutputSpeech {
+                        Ssml = string.Format(
+                            @"<speak>Esegui le istruzioni. <emphasis level=""strong"">{0}</emphasis>.</speak>",
+                            instructions
+                        )
+                    }
+                },
+                session
+            ));
         }
 
         private Task<IActionResult> UnsupportedLanguage() {
