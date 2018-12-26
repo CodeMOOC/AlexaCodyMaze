@@ -10,6 +10,8 @@ namespace Bot {
         public const string ReachCell = nameof(ReachCell);
         public const string GiveDirection = nameof(GiveDirection);
 
+        public const string Stop = "AMAZON.StopIntent";
+
     }
 
 }

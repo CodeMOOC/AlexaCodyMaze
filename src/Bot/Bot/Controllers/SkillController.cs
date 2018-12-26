@@ -39,7 +39,7 @@ namespace Bot.Controllers {
                     return NewSession(request, lr);
 
                 case SessionEndedRequest er:
-                    return DoNothing();
+                    return SayGoodbye();
 
                 case IntentRequest ir:
                     Logger.LogInformation(LoggingEvents.Requests, "Incoming Intent Request, name '{0}'", ir.Intent.Name);
@@ -48,6 +48,8 @@ namespace Bot.Controllers {
                             return ReachCell(request, ir);
                         case IntentTypes.GiveDirection:
                             return GiveDirection(request, ir);
+                        case IntentTypes.Stop:
+                            return SayGoodbye();
                     }
                     break;
             }
@@ -255,6 +257,10 @@ Poi dimmi le coordinate che hai scelto.</speak>"
 
         private Task<IActionResult> DoNothing() {
             return Task.FromResult<IActionResult>(Ok(ResponseBuilder.Empty()));
+        }
+
+        private Task<IActionResult> SayGoodbye() {
+            return Task.FromResult<IActionResult>(Ok(ResponseBuilder.Tell("Ciao!")));
         }
 
     }
