@@ -50,6 +50,9 @@ namespace Bot.Controllers {
                             return GiveDirection(request, ir);
                         case IntentTypes.Stop:
                             return SayGoodbye();
+                        case IntentTypes.Help:
+                        case IntentTypes.Cancel:
+                            return ProcessHelpAndBacktrack(request, ir);
                     }
                     break;
             }
@@ -243,6 +246,62 @@ Poi dimmi le coordinate che hai scelto.</speak>"
             ));
         }
 
+        private Task<IActionResult> ProcessHelpAndBacktrack(SkillRequest request, IntentRequest intent) {
+            Logger.LogInformation(LoggingEvents.Game, "Help request received");
+
+            Session session = request.Session;
+            var state = new State(Database.Context, session);
+            session.Attributes = new Dictionary<string, object>(); // clean up session attributes
+
+            if (state.IsSessionStart) {
+                return Task.FromResult<IActionResult>(
+                    Ok(ResponseBuilder.Ask(
+                        "Dopo aver preparato la scacchiera, posizionati in uno degli spazi sul bordo. Poi dimmi dove ti trovi, specificando colonna e poi riga.",
+                        null,
+                        session
+                    ))
+                );
+            }
+            else {
+                var coords = state.LastReached;
+                if(!coords.HasValue) {
+                    Logger.LogError(LoggingEvents.Game, "Cannot find last reached position for user");
+                    return InternalError();
+                }
+
+                (var mazeDestination, var instructions) = Chessboard.GenerateMazeForLevel(coords.Value, state.MovesCount - 1);
+                if (!mazeDestination.IsValid || state.LastDestination != mazeDestination) {
+                    Logger.LogError(LoggingEvents.Game, "Regenerated destination for maze level {0} is {1} instead of previously generated {2}", state.MovesCount, mazeDestination, state.LastDestination);
+                    return InternalError();
+                }
+
+                return Task.FromResult<IActionResult>(
+                    Ok(ResponseBuilder.Ask(
+                        new SsmlOutputSpeech {
+                            Ssml = string.Format(
+                                @"<speak>Torna alla casella <emphasis level=""strong"">{0}, {1},</emphasis> e girati verso {2}. Poi esegui le istruzioni: <emphasis level=""strong"">{3}</emphasis>.</speak>",
+                                coords.Value.Column.FromColumnIndex(),
+                                coords.Value.Row,
+                                coords.Value.Direction.Value.ToLocale(),
+                                instructions
+                            )
+                        }, new Reprompt {
+                            OutputSpeech = new SsmlOutputSpeech {
+                                Ssml = string.Format(
+                                    @"<speak>Parti da <emphasis level=""strong"">{0}, {1},</emphasis> verso {2}. Esegui le istruzioni: <emphasis level=""strong"">{3}</emphasis>.</speak>",
+                                    coords.Value.Column.FromColumnIndex(),
+                                    coords.Value.Row,
+                                    coords.Value.Direction.Value.ToLocale(),
+                                    instructions
+                                )
+                            }
+                        },
+                        session
+                    ))
+                );
+            }
+        }
+
         private Task<IActionResult> UnsupportedLanguage() {
             return Task.FromResult<IActionResult>(Ok(ResponseBuilder.Tell("I do not speak that language yet, sorry")));
         }
@@ -252,7 +311,7 @@ Poi dimmi le coordinate che hai scelto.</speak>"
         }
 
         private Task<IActionResult> InternalError(string msg = null) {
-            return Task.FromResult<IActionResult>(Ok(ResponseBuilder.Tell(msg ?? "C'è stato un errore, riprova")));
+            return Task.FromResult<IActionResult>(Ok(ResponseBuilder.Tell(msg ?? "C'è stato un errore, riprova da capo")));
         }
 
         private Task<IActionResult> DoNothing() {
