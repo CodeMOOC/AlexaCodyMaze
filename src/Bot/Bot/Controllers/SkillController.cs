@@ -164,6 +164,8 @@ Poi dimmi le coordinate che hai scelto.</speak>"
                 return Ok(response);
             }
 
+            session.Attributes = new Dictionary<string, object>(); // clean up session attributes
+
             // Check for destination to reach
             var destination = state.LastDestination;
             if (destination.HasValue) {
