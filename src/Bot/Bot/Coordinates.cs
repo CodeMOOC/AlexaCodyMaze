@@ -67,6 +67,42 @@ namespace Bot {
             return new Coordinates(Column, Row, Direction.Value.ToRight());
         }
 
+        public Coordinates Advance(int steps = 1) {
+            if (!Direction.HasValue)
+                throw new InvalidOperationException("Cannot advance without direction");
+
+            switch(Direction.Value) {
+                case Bot.Direction.North:
+                    return new Coordinates(Column, Row - steps, Direction.Value);
+                case Bot.Direction.East:
+                    return new Coordinates(Column + steps, Row, Direction.Value);
+                case Bot.Direction.South:
+                    return new Coordinates(Column, Row + steps, Direction.Value);
+                case Bot.Direction.West:
+                    return new Coordinates(Column - steps, Row, Direction.Value);
+            }
+
+            throw new InvalidOperationException("Invalid direction");
+        }
+
+        public int FreeAhead() {
+            if (!Direction.HasValue)
+                throw new InvalidOperationException("Cannot advance without direction");
+
+            switch(Direction.Value) {
+                case Bot.Direction.North:
+                    return (Row - 1).Clamp(0, Chessboard.Height - 1);
+                case Bot.Direction.East:
+                    return (Chessboard.MaxX - Column).Clamp(0, Chessboard.Width - 1);
+                case Bot.Direction.South:
+                    return (Chessboard.MaxY - Row).Clamp(0, Chessboard.Height - 1);
+                case Bot.Direction.West:
+                    return (Column - 1).Clamp(0, Chessboard.Width - 1);
+            }
+
+            return 0;
+        }
+
         #endregion
 
         public bool Equals(Coordinates other) {
@@ -107,8 +143,9 @@ namespace Bot {
             if (Direction.HasValue) {
                 return string.Format("({0},{1},{2})", Column, Row, Direction);
             }
-
-            return string.Format("({0},{1})", Column, Row);
+            else {
+                return string.Format("({0},{1})", Column, Row);
+            }
         }
 
         public static bool operator ==(Coordinates a, Coordinates b) {
